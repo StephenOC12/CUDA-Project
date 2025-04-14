@@ -31,7 +31,7 @@ int main(int argc, char* argv[]) {
 	std::cout << "GPU Min: " << minValue << std::endl;
 
 	// Find histogram
-	unsigned int *hist_h=NULL;
+	unsigned int *hist_h = new unsigned int[NUM_BINS];
 
 	histogram512(samples_h, numSamples, &hist_h, minValue,  maxValue);
 	unsigned long int counter = 0;
@@ -39,11 +39,12 @@ int main(int argc, char* argv[]) {
 		std::cout<< "Bin[" << j <<"]: " << hist_h[j] << std::endl;
 		counter += hist_h[j];
 	}
-	
+
 	std::cout << "Total number of elements in histogram: " << counter << std::endl;
 
 	// Free memory
 	free(samples_h);
+	free(hist_h);
 
    return 0;
 }
