@@ -44,7 +44,7 @@ int main(int argc, char* argv[]) {
 
 	// Free memory
 	free(samples_h);
-	free(hist_h);
+	delete[] hist_h;
 
    return 0;
 }
