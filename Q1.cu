@@ -42,10 +42,12 @@ size_t loadSamples(const char* path_to_data_points_file, float** ptr ){
 /////// Find Maximum
 __global__ void maxReduceKernel(float *d_in, size_t len_array){
 	__shared__ float sdata[BLOCK_SIZE];
+	// Accessing shared memory 
 
 	int tid = threadIdx.x;
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
+	// assigns the new value or sets it to the lowest float possible
 	if (idx < len_array) {
 		sdata[tid] = d_in[idx];
 	} else {
@@ -53,7 +55,9 @@ __global__ void maxReduceKernel(float *d_in, size_t len_array){
 	}
 
 	__syncthreads();
+	// makes sure all threads are at the same point before continuing on
 
+	// Performing the reduction in shared memory
 	for (unsigned int stride = blockDim.x / 2 ; stride > 0; stride >>= 1) {
 		if (tid < stride) {
 			sdata[tid] = max(sdata[tid],sdata[tid + stride]);
@@ -61,6 +65,7 @@ __global__ void maxReduceKernel(float *d_in, size_t len_array){
 		__syncthreads();
 	}
 
+	// Return the result back to global memroy.
 	if (threadIdx.x == 0) {
 		d_in[blockIdx.x] = sdata[0];
 	}
@@ -72,6 +77,7 @@ float findMaxValue(float* samples_h, size_t len_array){
 	float* input_d;
 	size_t size = len_array * sizeof(float);
 
+	// Allocate the GPU memory
 	cudaError_t err;
 	err = cudaMalloc((void**) &input_d, size);
 	if (err != cudaSuccess) {
@@ -79,6 +85,7 @@ float findMaxValue(float* samples_h, size_t len_array){
 		exit(-1);
 	}
 
+	// Copy data from host to device
 	err = cudaMemcpy(input_d, samples_h, size, cudaMemcpyHostToDevice);
 	if (err != cudaSuccess) {
 		std::cout << "Cuda Error with Memcpy: " <<cudaGetErrorString(err) << std::endl;
@@ -89,6 +96,7 @@ float findMaxValue(float* samples_h, size_t len_array){
 	size_t currentSize = len_array;
 	int num_blocks = (currentSize + BLOCK_SIZE -1) / BLOCK_SIZE;
 
+	// repeatedly call reduction until there is only one value
 	while(currentSize > 1) {
 		maxReduceKernel<<<num_blocks, BLOCK_SIZE>>>(input_d, currentSize);
 		cudaDeviceSynchronize();
@@ -98,6 +106,7 @@ float findMaxValue(float* samples_h, size_t len_array){
 
 	cudaDeviceSynchronize();
 
+	// Copy the result back from device to host
 	float result;
 	err = cudaMemcpy(&result, input_d, sizeof(float), cudaMemcpyDeviceToHost);
 	if (err != cudaSuccess) {
@@ -106,6 +115,7 @@ float findMaxValue(float* samples_h, size_t len_array){
 		exit(-1);
 	}
 
+	// Free up device memory
 	cudaFree(input_d);
 	return result;
 }
@@ -114,10 +124,12 @@ float findMaxValue(float* samples_h, size_t len_array){
 /////// Find Minimum
 __global__ void minReduceKernel(float *d_in, size_t len_array){
 	__shared__ float sdata[BLOCK_SIZE];
+	// Accessing shared memory 
 
 	int tid = threadIdx.x;
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
+	// assigns the new value or sets it to the mamximum float possible
 	if (idx < len_array) {
 		sdata[tid] = d_in[idx];
 	} else {
@@ -125,7 +137,10 @@ __global__ void minReduceKernel(float *d_in, size_t len_array){
 	}
 
 	__syncthreads();
+	// makes sure all threads are at the same point before continuing on
 
+
+	// Performing the reduction in shared memory
 	for (int stride = blockDim.x / 2 ; stride > 0; stride >>= 1) {
 		if (tid < stride) {
 			sdata[tid] = min(sdata[tid] , sdata[tid + stride]);
@@ -133,6 +148,7 @@ __global__ void minReduceKernel(float *d_in, size_t len_array){
 		__syncthreads();
 	}
 
+	// Return the result back to global memroy.
 	if (threadIdx.x == 0) {
 		d_in[blockIdx.x] = sdata[0];
 	}
@@ -144,6 +160,7 @@ float findMinValue(float* samples_h, size_t len_array){
 	float* input_d;
 	size_t size = len_array * sizeof(float);
 
+	// Allocate the GPU memory
 	cudaError_t err;
 	err = cudaMalloc((void**) &input_d, size);
 	if (err != cudaSuccess) {
@@ -151,6 +168,7 @@ float findMinValue(float* samples_h, size_t len_array){
 		exit(-1);
 	}
 
+	// Copy data from host to device
 	err = cudaMemcpy(input_d, samples_h, size, cudaMemcpyHostToDevice);
 	if (err != cudaSuccess) {
 		std::cout << "Cuda Error with Memcpy: " <<cudaGetErrorString(err) << std::endl;
@@ -161,6 +179,7 @@ float findMinValue(float* samples_h, size_t len_array){
 	size_t currentSize = len_array;
 	int num_blocks = (currentSize + BLOCK_SIZE -1) / BLOCK_SIZE;
 
+	// repeatedly call reduction until there is only one value
 	while(currentSize > 1) {
 		minReduceKernel<<<num_blocks, BLOCK_SIZE>>>(input_d, currentSize);
 		cudaDeviceSynchronize();
@@ -170,6 +189,7 @@ float findMinValue(float* samples_h, size_t len_array){
 
 	cudaDeviceSynchronize();
 
+	// Copy the result back from device to host
 	float result;
 	err = cudaMemcpy(&result, input_d, sizeof(float), cudaMemcpyDeviceToHost);
 	if (err != cudaSuccess) {
@@ -178,6 +198,7 @@ float findMinValue(float* samples_h, size_t len_array){
 		exit(-1);
 	}
 
+	// Free up device memory
 	cudaFree(input_d);
 	return result;
 }
@@ -187,7 +208,9 @@ float findMinValue(float* samples_h, size_t len_array){
 /////// Create Histogram
 __global__ void histogramKernel512(float *d_in, unsigned int *hist, size_t len_array, float min_value, float max_value) {
 	__shared__ unsigned int hist_shared[NUM_BINS];
+	// Private copy of histogram on shared memory
 
+	// Initialise local histogrm and bins with 0
 	int tid = threadIdx.x;
 	if (tid < NUM_BINS) {
 		hist_shared[tid] = 0;
@@ -197,6 +220,7 @@ __global__ void histogramKernel512(float *d_in, unsigned int *hist, size_t len_a
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
 	int stride = blockDim.x * gridDim.x;
 
+	// Loop over input data, compute bin indices and update local histogram.
 	for (int i = idx; i < len_array; i += stride) {
 		float val = d_in[i];
 		int bin = (int)(((val-min_value) / (max_value-min_value)) * NUM_BINS);
@@ -205,6 +229,7 @@ __global__ void histogramKernel512(float *d_in, unsigned int *hist, size_t len_a
 	}
 	__syncthreads();
 
+	// Commit local histogram to global memory
 	if (tid < NUM_BINS) {
 		atomicAdd(&(hist[tid]), hist_shared[tid]);
 	}
@@ -217,6 +242,7 @@ void histogram512(float *samples_h, size_t len_array, unsigned int **hist_h, flo
 	float *samples_d;
 	unsigned int *hist_d;
 
+	// Allocate GPU memory
 	cudaError_t err = cudaMalloc((void**)&samples_d, len_array * sizeof(float));
 	if (err != cudaSuccess) {
 		std::cout << "Cuda Error allocating memory for samples_d: " << cudaGetErrorString(err) << std::endl;
@@ -229,7 +255,7 @@ void histogram512(float *samples_h, size_t len_array, unsigned int **hist_h, flo
 		cudaFree(samples_d);
 		exit(-1);
 	}
-
+	// Initialise histogram to 0 on the GPU
 	err = cudaMemset(hist_d, 0, NUM_BINS * sizeof(unsigned int));
 		if (err != cudaSuccess) {
 			std::cout << "Cuda Error initialising hist_d: " << cudaGetErrorString(err) << std::endl;
@@ -238,6 +264,7 @@ void histogram512(float *samples_h, size_t len_array, unsigned int **hist_h, flo
 			exit(-1);
 	}
 
+	// Copy samples from host to device 
 	err = cudaMemcpy(samples_d, samples_h, len_array * sizeof(float), cudaMemcpyHostToDevice);
 		if (err != cudaSuccess) {
 			std::cout << "Cuda Error copying samples to device: " << cudaGetErrorString(err) << std::endl;
@@ -246,10 +273,12 @@ void histogram512(float *samples_h, size_t len_array, unsigned int **hist_h, flo
 			exit(-1);
 	}
 
+	//  Calling the Histogram Kernel
 	dim3 block(BLOCK_SIZE);
 	dim3 grid((len_array + BLOCK_SIZE - 1) / BLOCK_SIZE);
 	histogramKernel512<<<grid, block>>>(samples_d, hist_d, len_array, min_value, max_value);
 
+	// Checking for errors when excecuting kernel
 	err = cudaGetLastError();
 	if (err != cudaSuccess) {
 		std::cout << "Cuda kernel launch error: " << cudaGetErrorString(err) << std::endl;
@@ -268,6 +297,7 @@ void histogram512(float *samples_h, size_t len_array, unsigned int **hist_h, flo
 
 	*hist_h = new unsigned int[NUM_BINS];
 
+	// Copy result back to host
 	err = cudaMemcpy(*hist_h, hist_d, NUM_BINS * sizeof(unsigned int), cudaMemcpyDeviceToHost);
 	if (err != cudaSuccess) {
 		std::cout << "Cuda error copying histogram back to host: " << cudaGetErrorString(err) << std::endl;
@@ -276,6 +306,7 @@ void histogram512(float *samples_h, size_t len_array, unsigned int **hist_h, flo
 		exit(-1);
 	}
 
+	// Free device's memory
 	cudaFree(samples_d);
 	cudaFree(hist_d);
 }
