@@ -1,10 +1,3 @@
-//============================================================================
-// Name        : main.cpp
-// Author      : 
-// Version     :
-// Copyright   :
-// Description : COM2039 Histogram Coursework
-//============================================================================
 
 #include "com2039.hpp"
 #include <cmath>
